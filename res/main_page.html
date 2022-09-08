@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script>
+function validateForm() {
+  let address = document.forms["form"]["address"].value;
+  let block_number = document.forms["form"]["block_number"].value;
+  if (!(address.match("^0x[a-fA-F0-9]{40}$"))){
+    alert("Wrong ethereum address format");
+    return false;
+  }
+  if (!(block_number.match("^[0-9]+$"))){
+    alert("Wrong ethereum block number format");
+    return false;
+  }
+}
+</script>
+</head>
+<form name="form" action="crawler/get_transactions" onsubmit="return validateForm()" method="post">
+    <fieldset>
+      <legend>Get Ethereum transactions data</legend>
+      <div>
+        <label for="address">Address</label><br/>
+        <input name="address" type="text" id="address" placeholder="Enter wallet address" size="50" required /><br/>
+      </div>
+
+      <div>
+        <label for="blok_number">Block number</label><br/>
+        <input
+          type="text"
+          name="block_number"
+          id="block_number"
+          placeholder="Enter start block number"
+          size="50"
+          required
+        /><br/>
+      </div>
+      <input type="submit" value="Get transactions" class="submit-btn" />
+    </fieldset>
+</form>
+</html>
