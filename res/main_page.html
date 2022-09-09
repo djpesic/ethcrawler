@@ -2,26 +2,62 @@
 <html>
 <head>
 <script>
-function validateForm() {
-  let address = document.forms["form"]["address"].value;
-  let block_number = document.forms["form"]["block_number"].value;
-  if (!(address.match("^0x[a-fA-F0-9]{40}$"))){
-    alert("Wrong ethereum address format");
-    return false;
-  }
-  if (!(block_number.match("^[0-9]+$"))){
-    alert("Wrong ethereum block number format");
-    return false;
-  }
+function getTransactions() {
+    let address = document.getElementById("address").value;
+    let block_number = document.getElementById("block_number").value;
+    if (!(address.match("^0x[a-fA-F0-9]{40}$"))){
+        alert("Wrong ethereum address format");
+        return false;
+    }
+    if (!(block_number.match("^[0-9]+$"))){
+        alert("Wrong ethereum block number format");
+        return false;
+    }
+    document.getElementById("status").textContent='Loading...';
+    fetch('crawler/get_transactions', {
+            method: 'POST',
+            body: 'address='+address+'&block_number='+block_number,
+            headers: {
+                'Content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            }
+        })
+        .then(response => response.json())
+        .then(json => display_response(json));
+        // .catch(err => {
+        //     document.getElementById("status").textContent=err;
+        // });
+    return true;
+}
+function display_response(transactions){
+    document.getElementById("status").textContent='';
+    console.log(transactions);
+    let table_body=document.getElementById("body");
+    console.log(table_body);
+    transactions.forEach(transaction => {
+        console.log(transaction);
+        let tr = document.createElement('tr');
+        let td_address = document.createElement('td');
+        td_address.innerHTML = transaction.address;
+        let td_direction = document.createElement('td');
+        td_direction.innerHTML = transaction.direction;
+        let td_fee = document.createElement('td');
+        td_fee.innerHTML = transaction.transaction_fee;
+        let td_transferred = document.createElement('td');
+        td_transferred.innerHTML = transaction.transfered;
+        tr.appendChild(td_address);
+        tr.appendChild(td_direction);
+        tr.appendChild(td_transferred);
+        tr.appendChild(td_fee);
+        table_body.appendChild(tr);
+    });
 }
 </script>
 </head>
-<form name="form" action="crawler/get_transactions" onsubmit="return validateForm()" method="post">
     <fieldset>
-      <legend>Get Ethereum transactions data</legend>
+      <legend>Input data</legend>
       <div>
         <label for="address">Address</label><br/>
-        <input name="address" type="text" id="address" placeholder="Enter wallet address" size="50" required /><br/>
+        <input type="text" id="address" placeholder="Enter wallet address" size="50" required /><br/>
       </div>
 
       <div>
@@ -35,7 +71,29 @@ function validateForm() {
           required
         /><br/>
       </div>
-      <input type="submit" value="Get transactions" class="submit-btn" />
+      <div>
+        <button type="button" id="get_transactions" onclick="getTransactions()">Get transactions</button>
+      </div>
     </fieldset>
-</form>
+<fieldset>
+    <legend>Results </legend><br>
+    <label id="status"></label>
+    <div style="align-items: center;">
+        <button id="prev-button" onclick="prev_batch()">Previous</button>         
+        <button id="next-button" onclick="next_batch()">Next</button>
+        <table>
+            <thead>
+                <tr>
+                  <th>Address</th>
+                  <th>Direction</th>
+                  <th>Transferred</th>
+                  <th>Fee</th>
+                </tr>
+            </thead>
+            <tbody id="body">
+            </tbody>
+        </table>
+    </div>
+</fieldset>
+
 </html>
