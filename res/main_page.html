@@ -32,9 +32,8 @@ function display_response(transactions){
     document.getElementById("status").textContent='';
     console.log(transactions);
     let table_body=document.getElementById("body");
-    console.log(table_body);
+    table_body.innerHTML='';
     transactions.forEach(transaction => {
-        console.log(transaction);
         let tr = document.createElement('tr');
         let td_address = document.createElement('td');
         td_address.innerHTML = transaction.address;
@@ -50,6 +49,7 @@ function display_response(transactions){
         tr.appendChild(td_fee);
         table_body.appendChild(tr);
     });
+    console.log(table_body)
 }
 </script>
 </head>

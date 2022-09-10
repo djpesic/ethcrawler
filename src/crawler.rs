@@ -1,10 +1,21 @@
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
-use std::time::{SystemTime, UNIX_EPOCH};
+use sqlite::{Connection, Statement, ValueInto};
+use std::{time::{SystemTime, UNIX_EPOCH}, fmt::format};
+use tokio::sync::Mutex;
 
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 enum Direction{IN, OUT}
+impl ValueInto for Direction{
+    fn into(value: &sqlite::Value) -> Option<Self> {
+        if let Some(val)=value.as_string() {
+            if val=="IN" {Some(Direction::IN)} else {Some(Direction::OUT)}
+        }else{
+            None
+        }
+    }
+}
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Transaction{
     address: String,
@@ -14,38 +25,85 @@ pub struct Transaction{
 }
 
 
-#[derive(Debug)]
 pub struct Crawler{
     eth_scan:EtherScan,
-    transactions: Vec<Transaction>,
+    db:Mutex<Connection>,
 }
 impl Crawler{
     pub const BATCH_SIZE:i32=100;
-    pub fn new()->Self{
+    pub async fn new()->Self{
+        
+        let dbm = Mutex::new(sqlite::open("res/database.db").unwrap());
         Crawler{
             eth_scan:EtherScan::new(),
-            transactions:Vec::new(),
+            db:dbm,
         }
     }
-    pub fn get_number_of_batches(&self)->i32{
-        let number = self.transactions.len() as i32/ Crawler::BATCH_SIZE;
-        let rem = self.transactions.len() as i32 % Crawler::BATCH_SIZE;
+    pub async fn get_number_of_batches(&self)->i32{
+        let len = self.get_transaction_number().await;
+        let number = len/ Crawler::BATCH_SIZE;
+        let rem = len % Crawler::BATCH_SIZE;
         (number + rem) as i32
     }
-    pub fn get_batch(&self, batch_index:i32)->Vec<Transaction>{
-        let len = self.transactions.len() as i32;
+    async fn get_transaction_number(&self)->i32{
+        let statement = "SELECT count(*) FROM transactions";
+        let db = self.db.lock().await;
+        let mut cursor = db.prepare(statement).unwrap().into_cursor();
+        let mut len = 0;
+        while let Some(Ok(row))=cursor.next(){
+           len = row.get(0)
+        }
+        len as i32
+    }
+    pub async fn get_batch(&self, batch_index:i32)->Vec<Transaction>{
+        let len = self.get_transaction_number().await;
         let start = Crawler::BATCH_SIZE * batch_index;
         let mut end =start+Crawler::BATCH_SIZE-1;
         if end > len-1 {
             end = len-1;
         }
-        let batch:Vec<Transaction> = self.transactions.iter().enumerate().filter(|(index, _)|{
-            (*index as i32>=start) && (*index as i32<=end)
-        }).map(|(_,val)|{val.clone()}).collect();
+        let statement = "SELECT * FROM transactions WHERE position>=? and position<=?";
+        let db = self.db.lock().await;
+        let vals = [sqlite::Value::Integer(start as i64), sqlite::Value::Integer(end as i64)];
+        let mut cursor = db.prepare(statement).unwrap().into_cursor().bind(&vals).unwrap();
+        let mut batch = Vec::new();
+        while let Some(Ok(row))=cursor.next(){
+            let t = Transaction{
+                address:row.get(2),
+                direction:row.get(3),
+                transfered:row.get(4),
+                transaction_fee:row.get(5),
+            };
+            batch.push(t);
+        }
         batch
     }
-    pub fn save_transactions(&mut self, transactios: Vec<Transaction>){
-        self.transactions = transactios;
+    pub async fn save_transactions(&mut self, transactions: Vec<Transaction>){
+        let mut statement = String::from("INSERT INTO transactions (position, address, direction, transfered, fee) VALUES");
+        for i in 0..transactions.len(){
+            let t = transactions.get(i).unwrap();
+            let mut entry =format!("({},'{}','{:?}',{},{})",i,t.address, t.direction, t.transfered, t.transaction_fee);
+            if i<transactions.len()-1{
+                entry.push(',');
+            }
+            statement.push_str(entry.as_str());
+        }
+        let db = self.db.lock().await;
+        db.execute("DROP TABLE transactions").unwrap();
+        db.execute(
+    "
+                CREATE TABLE \"transactions\" (
+                    \"id\"	INTEGER,
+                    \"position\"	INTEGER,
+                    \"address\"	TEXT,
+                    \"direction\"	TEXT,
+                    \"transfered\"	REAL,
+                    \"fee\"	REAL,
+                    PRIMARY KEY(\"id\")
+                );
+                "
+        ).unwrap();
+        db.execute(statement).unwrap();
     }
     pub async fn get_transactions(&self, address: String, block_number:String)->Vec<Transaction>{
         let mut result = Vec::new();
