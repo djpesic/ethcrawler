@@ -1,7 +1,9 @@
+use chrono::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlite::{Connection, Statement, ValueInto};
-use std::{time::{SystemTime, UNIX_EPOCH}, fmt::format};
+use sqlite::{Connection, ValueInto};
+use core::time;
+use std::{time::{SystemTime, UNIX_EPOCH}};
 use tokio::sync::Mutex;
 
 
@@ -22,6 +24,7 @@ pub struct Transaction{
     direction: Direction,
     transfered: f64,
     transaction_fee: f64,
+    timestamp:i64,
 }
 
 
@@ -39,6 +42,10 @@ impl Crawler{
             db:dbm,
         }
     }
+    pub async fn get_latest_block_number(&self)->String{
+        self.eth_scan.get_latest_block_number().await
+    }
+
     pub async fn get_number_of_batches(&self)->i32{
         let len = self.get_transaction_number().await;
         let number = len/ Crawler::BATCH_SIZE;
@@ -73,6 +80,7 @@ impl Crawler{
                 direction:row.get(3),
                 transfered:row.get(4),
                 transaction_fee:row.get(5),
+                timestamp:row.get(6),
             };
             batch.push(t);
         }
@@ -90,14 +98,16 @@ impl Crawler{
                     \"direction\"	TEXT,
                     \"transfered\"	REAL,
                     \"fee\"	REAL,
+                    \"timestamp\"   INTEGER,
                     PRIMARY KEY(\"id\")
                 );
                 "
         ).unwrap();
-        let mut statement = String::from("INSERT INTO transactions (position, address, direction, transfered, fee) VALUES");
+        let mut statement = String::from("INSERT INTO transactions (position, address, direction, transfered, fee, timestamp) VALUES");
         for i in 0..transactions.len(){
             let t = transactions.get(i).unwrap();
-            let mut entry =format!("({},'{}','{:?}',{},{})",i,t.address, t.direction, t.transfered, t.transaction_fee);
+            let mut entry =format!("({},'{}','{:?}',{},{},{})",
+            i,t.address, t.direction, t.transfered, t.transaction_fee, t.timestamp);
             if i<transactions.len()-1{
                 entry.push(',');
             }
@@ -105,14 +115,13 @@ impl Crawler{
         }
         db.execute(statement).unwrap();
     }
-    pub async fn get_transactions(&self, address: String, block_number:String)->Vec<Transaction>{
+
+    pub async fn get_transactions(&self, address: String, start_block_number:String, end_block_number:String)->Vec<Transaction>{
         let mut result = Vec::new();
         let mut page = 1;
-        let endblock = self.eth_scan.clone().get_latest_block_number().await;
-        println!("endblock: {}",endblock);
         loop{
             let mut rsp = self.eth_scan.clone().get_list_of_normal_transactions(address.clone(), 
-                block_number.clone(), endblock.clone(), page, 10000/page).await;
+            start_block_number.clone(), end_block_number.clone(), page, 10000/page).await;
             page=page+1;
             if rsp.is_empty(){
                 break;
@@ -121,6 +130,32 @@ impl Crawler{
         }
         println!{"Transactions are downloaded. Total number: {}",result.len()};
         result
+    }
+
+    pub async fn calculate_eth_balance(&self, time:String, address:String)->f64{
+        let mut latest_block = self.eth_scan.get_latest_block_number().await;
+        println!("Latest block: {}", latest_block);
+        let mut latest_balance = self.eth_scan.get_ether_balance_for_address(address.clone()).await;
+        println!("Latest balance: {}", latest_balance);
+        let time = Utc.datetime_from_str(time.as_str(), "%Y-%m-%d %H:%M:%S").unwrap();
+        let timestamp = time.timestamp();
+        println!("Timestamp: {}", timestamp);
+        loop{
+            let start_block :i128= latest_block.parse().unwrap();
+            let mut end_block = start_block - 100i128 * Crawler::BATCH_SIZE as i128;
+            if end_block < 0 {end_block = 0;}
+            let transactions = self.get_transactions(
+                address.clone(), end_block.to_string(), start_block.to_string()).await;
+            for t in transactions{
+                if t.timestamp < timestamp{
+                    return latest_balance;
+                }
+                latest_balance = t.transfered + t.transaction_fee;
+            }
+            if end_block ==0 {break;}
+            latest_block = (end_block-1).to_string();
+        }
+        latest_balance
     }
 }
 #[derive(Debug, Clone)]
@@ -147,7 +182,7 @@ impl EtherScan{
         self.parse_transaction_list(rsp, address)
     }
 
-    pub async fn get_latest_block_number(self)->String{
+    pub async fn get_latest_block_number(&self)->String{
         let time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -159,9 +194,20 @@ impl EtherScan{
         let parsed:Value = serde_json::from_str(&rsp).unwrap();
         let parsed = parsed["result"].as_str().unwrap();
         parsed.to_string()
-    }   
+    }
 
-    fn parse_transaction_list(self, rsp:String, address: String)->Vec<Transaction>{
+    pub async fn get_ether_balance_for_address(&self, address: String)->f64{
+        let uri = format!{"{}?module=account&action=balance&address={}&tag=latest&apikey={}",
+            EtherScan::API_ROOT, address, EtherScan::API_KEY};
+        println!("uri: {}",uri);
+        let rsp = reqwest::get(uri).await.unwrap().text().await.unwrap();
+        let parsed:Value = serde_json::from_str(&rsp).unwrap();
+        let parsed = parsed["result"].as_str().unwrap();
+        let result :f64= parsed.parse().unwrap();
+        result / 1e18
+    }
+
+    fn parse_transaction_list(&self, rsp:String, address: String)->Vec<Transaction>{
         let parsed:Value = serde_json::from_str(&rsp).unwrap();
      
         let result_arr = parsed["result"].as_array().unwrap();
@@ -185,10 +231,13 @@ impl EtherScan{
             };
             let tx_fee = gas_price as f64/1e18*gas_used as f64;
             let value = value as f64 / 1e18 as f64;
+            let timestamp = tr.get("timeStamp").unwrap().to_string();
+            let timestamp:i64 = timestamp[1..timestamp.len()-1].parse().unwrap();
             result.push(Transaction { address: if addr_from==address {addr_to} else{addr_from}, 
                 direction, 
                 transfered: value, 
                 transaction_fee: tx_fee,
+                timestamp,
              });
         }   
         result
