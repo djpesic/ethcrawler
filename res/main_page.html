@@ -22,10 +22,15 @@ function getTransactions() {
             }
         })
         .then(response => response.json())
-        .then(json => display_response(json));
-        // .catch(err => {
-        //     document.getElementById("status").textContent=err;
-        // });
+        .then(json => {
+            display_response(json);
+            fetch('crawler/number_of_batches')
+                .then(response => response.json())
+                .then(json => {
+                    document.getElementById("total-batch-number").innerHTML = json;
+                    document.getElementById("batch-number").value = 1;
+                });
+        });
     
     return true;
 }
@@ -48,13 +53,78 @@ function display_response(transactions){
         tr.appendChild(td_transferred);
         tr.appendChild(td_fee);
         table_body.appendChild(tr);
-    });
-    fetch('crawler/number_of_batches')
-    .then(response => response.json())
-    .then(json => {
-        document.getElementById("total-batch-number").innerHTML = json;
-        document.getElementById("batch-number").value = 1;
-    });
+    });   
+}
+function validate_batch_number(number){
+    if (!(number.match("^[0-9]+$"))){
+        alert("Wrong batch number format");
+        return false;
+    }
+    return true;
+}
+function prev_batch(){
+    let curr_batch = document.getElementById("batch-number").value;
+    if(validate_batch_number(curr_batch)){
+        if(curr_batch >1){
+            fetch('crawler/number_of_batches')
+                .then(response => response.json())
+                .then(json => {
+                    let total_batch_number = json;
+                    if(curr_batch > total_batch_number ) return false;
+                    curr_batch=Number(curr_batch) - Number(1);
+                    document.getElementById("batch-number").value = curr_batch;
+                    get_batch(curr_batch);
+                    return true;
+                });
+        }
+    }   
+    return false;
+}
+function next_batch(){
+    let curr_batch = document.getElementById("batch-number").value;
+    if(validate_batch_number(curr_batch)){
+        if(curr_batch >=1){
+            fetch('crawler/number_of_batches')
+                .then(response => response.json())
+                .then(json => {
+                    let total_batch_number = json;
+                    if(curr_batch >= total_batch_number ) return false;
+                    curr_batch=Number(curr_batch) + Number(1);
+                    document.getElementById("batch-number").value = curr_batch;
+                    get_batch(curr_batch);
+                    return true;
+                });
+        }
+    }
+    return false;
+}
+function batch(){
+    let curr_batch = document.getElementById("batch-number").value;
+    if(validate_batch_number(curr_batch)){
+        if(curr_batch < 1) return false;
+        fetch('crawler/number_of_batches')
+            .then(response => response.json())
+            .then(json => {
+                let total_batch_number = json;
+                if(curr_batch > total_batch_number ) return false;
+                document.getElementById("batch-number").value = curr_batch;
+                get_batch(curr_batch);
+                return true;
+            });
+    }
+}
+function get_batch(batch_number){
+    let curr_batch = document.getElementById("batch-number").value;
+    
+    fetch('crawler/get_batch', {
+            method: 'POST',
+            body: 'batch_number='+batch_number,
+            headers: {
+                'Content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            }
+        })
+        .then(response => response.json())
+        .then(json => display_response(json));
 }
 </script>
 </head>
@@ -86,6 +156,7 @@ function display_response(transactions){
     <div style="align-items: center;">
         <button id="prev-button" onclick="prev_batch()">Previous</button>   
         <button id="next-button" onclick="next_batch()">Next</button>
+        <button id="go-button" onclick="batch()">Go</button>
         <input id="batch-number"></input>
         <label >/</label>      
         <label id="total-batch-number"></label>
