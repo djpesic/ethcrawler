@@ -43,7 +43,7 @@ impl Crawler{
         let len = self.get_transaction_number().await;
         let number = len/ Crawler::BATCH_SIZE;
         let rem = len % Crawler::BATCH_SIZE;
-        (number + rem) as i32
+        if rem == 0 {number} else {number+1}
     }
     async fn get_transaction_number(&self)->i32{
         let statement = "SELECT count(*) FROM transactions";
@@ -79,15 +79,6 @@ impl Crawler{
         batch
     }
     pub async fn save_transactions(&mut self, transactions: Vec<Transaction>){
-        let mut statement = String::from("INSERT INTO transactions (position, address, direction, transfered, fee) VALUES");
-        for i in 0..transactions.len(){
-            let t = transactions.get(i).unwrap();
-            let mut entry =format!("({},'{}','{:?}',{},{})",i,t.address, t.direction, t.transfered, t.transaction_fee);
-            if i<transactions.len()-1{
-                entry.push(',');
-            }
-            statement.push_str(entry.as_str());
-        }
         let db = self.db.lock().await;
         db.execute("DROP TABLE transactions").unwrap();
         db.execute(
@@ -103,6 +94,15 @@ impl Crawler{
                 );
                 "
         ).unwrap();
+        let mut statement = String::from("INSERT INTO transactions (position, address, direction, transfered, fee) VALUES");
+        for i in 0..transactions.len(){
+            let t = transactions.get(i).unwrap();
+            let mut entry =format!("({},'{}','{:?}',{},{})",i,t.address, t.direction, t.transfered, t.transaction_fee);
+            if i<transactions.len()-1{
+                entry.push(',');
+            }
+            statement.push_str(entry.as_str());
+        }
         db.execute(statement).unwrap();
     }
     pub async fn get_transactions(&self, address: String, block_number:String)->Vec<Transaction>{

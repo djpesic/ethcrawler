@@ -13,8 +13,13 @@ async fn main() {
     let get_transactions = warp::path!("crawler" / "get_transactions").
     and(warp::body::form()).
     and_then(get_transactions);
+
+    let number_of_batches = warp::path!("crawler" / "number_of_batches").
+    and(warp::get()).
+    and_then(get_number_of_batches);
     
-    let final_routes = main_page.or(get_transactions);
+    let final_routes = 
+    main_page.or(get_transactions).or(number_of_batches);
 
     warp::serve(final_routes)
         .run(([127, 0, 0, 1], 3030))
@@ -29,4 +34,11 @@ async fn get_transactions(simple_map:HashMap<String, String>)->Result<impl warp:
     let rsp = crawler.get_transactions(address, block_number).await;
     crawler.save_transactions(rsp).await;
     Ok(warp::reply::json(&(crawler.get_batch(0).await)))
+}
+
+async fn get_number_of_batches()->Result<impl warp::Reply, Infallible>{
+    let crawler = Crawler::new().await;
+    let batch_number = crawler.get_number_of_batches().await;
+    println!("Number of transaction batches: {}", batch_number);
+    Ok(warp::reply::json(&batch_number))
 }
