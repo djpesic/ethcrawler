@@ -26,9 +26,11 @@ cargo run
 ```
 Client is tested in Chrome browser. Open Chrome and go to http://localhost:3030/crawler or http://127.0.0.1:3030/crawler.
 
-Client web page have following inputs: Address (Eth address format) and block number. For example: 0xaa7a9ca87d3694b5755f213b5d04094b8d0f0a6f, 15443116.
+Client web page have following inputs: Address (Eth address format), block number, date. For example: 0xaa7a9ca87d3694b5755f213b5d04094b8d0f0a6f, 15443116.
 
 Button "Get transactions" start crawling process. Results will be displayed inside table, and separated by pages. Table supports navigation:
 * Next - Go to the next page.
 * Prev - Go to the previous page.
 * Go - Jump to the specified page. Page number should be entered in text box.
+
+Button "Get historical balance" starts calculation of ETH balance for given address and given time.
