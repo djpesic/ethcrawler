@@ -21,12 +21,17 @@ async fn main() {
     and(warp::body::form()).
     and_then(get_batch);
 
-    let historical_balance = warp::path!("crawler" / "historical_balance").
+    let eth_historical_balance = warp::path!("crawler" / "eth_historical_balance").
     and(warp::body::form()).
-    and_then(get_historical_balance);
+    and_then(get_eth_historical_balance);
+
+    let erc20_historical_balance = warp::path!("crawler" / "erc20_historical_balance").
+    and(warp::body::form()).
+    and_then(get_erc20_historical_balance);
     
     let final_routes = 
-    main_page.or(get_transactions).or(number_of_batches).or(get_batch).or(historical_balance);
+    main_page.or(get_transactions).or(number_of_batches).or(get_batch).or(eth_historical_balance)
+    .or(erc20_historical_balance);
 
     warp::serve(final_routes)
         .run(([127, 0, 0, 1], 3030))
@@ -45,15 +50,23 @@ async fn get_transactions(simple_map:HashMap<String, String>)->Result<impl warp:
     Ok(warp::reply::json(&(crawler.get_batch(0).await)))
 }
 
-async fn get_historical_balance(simple_map:HashMap<String, String>)->Result<impl warp::Reply, Infallible>{
+async fn get_eth_historical_balance(simple_map:HashMap<String, String>)->Result<impl warp::Reply, Infallible>{
     let crawler = Crawler::new().await;
     let date = simple_map.get("date").unwrap().into();
     let address = simple_map.get("address").unwrap().into();
-    println!("Getting historical balance for address {}, date {}", address, date);
+    println!("Getting eth historical balance for address {}, date {}", address, date);
     let balance = crawler.calculate_eth_balance(date, address).await;
     Ok(warp::reply::json(&balance))
 }
 
+async fn get_erc20_historical_balance(simple_map:HashMap<String, String>)->Result<impl warp::Reply, Infallible>{
+    let crawler = Crawler::new().await;
+    let date = simple_map.get("date").unwrap().into();
+    let address = simple_map.get("address").unwrap().into();
+    println!("Getting erc20 historical balance for address {}, date {}", address, date);
+    let balance = crawler.calculate_erc20_balance(date, address).await;
+    Ok(warp::reply::json(&balance))
+}
 
 async fn get_batch(simple_map:HashMap<String, String>)->Result<impl warp::Reply, Infallible>{
     let crawler = Crawler::new().await;

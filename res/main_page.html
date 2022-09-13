@@ -126,8 +126,8 @@ function get_batch(batch_number){
         .then(response => response.json())
         .then(json => display_response(json));
 }
-function getHistoricalBalance(){
-    document.getElementById("historical_balance").innerHTML = "Loading...";
+function getEthHistoricalBalance(){
+    document.getElementById("eth_historical_balance").innerHTML = "Loading...";
     let address = document.getElementById("address").value;
     let date = document.getElementById("date").value;
     if (!(address.match("^0x[a-fA-F0-9]{40}$"))){
@@ -135,11 +135,11 @@ function getHistoricalBalance(){
         return false;
     }
     if (!(date.match("[0-9]{4}-[0-9]{2}-[0-9]{2}$"))){
-        alert("Wrong ethereum date format");
+        alert("Wrong date format");
         return false;
     }
     date +=' 00:00:00';
-    fetch('crawler/historical_balance', {
+    fetch('crawler/eth_historical_balance', {
             method: 'POST',
             body: 'address='+address+'&date='+date,
             headers: {
@@ -148,7 +148,42 @@ function getHistoricalBalance(){
         })
         .then(response => response.json())
         .then(json => {
-            document.getElementById("historical_balance").innerHTML = json;
+            document.getElementById("eth_historical_balance").innerHTML = json;
+        });
+}
+
+function getErc20HistoricalBalance(){
+    document.getElementById("erc20_historical_balance").innerHTML = "Loading...";
+    let address = document.getElementById("address").value;
+    let date = document.getElementById("date").value;
+    if (!(address.match("^0x[a-fA-F0-9]{40}$"))){
+        alert("Wrong ethereum address format");
+        return false;
+    }
+    if (!(date.match("[0-9]{4}-[0-9]{2}-[0-9]{2}$"))){
+        alert("Wrong date format");
+        return false;
+    }
+    date +=' 00:00:00';
+    fetch('crawler/erc20_historical_balance', {
+            method: 'POST',
+            body: 'address='+address+'&date='+date,
+            headers: {
+                'Content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            }
+        })
+        .then(response => response.json())
+        .then(json => {
+            document.getElementById("erc20_historical_balance").innerHTML = '';
+            let balance_list = document.getElementById("erc20_historical_balance_list");
+            balance_list.innerHTML = '';
+            for (var denom of Object.keys(json)) {
+                let amount = json[denom];
+                let li = document.createElement('li');
+                li.innerHTML = amount + ' '+denom;
+                balance_list.appendChild(li);
+            }
+            
         });
 }
 </script>
@@ -177,12 +212,17 @@ function getHistoricalBalance(){
       <div>
         <label">Historical balance</label>
         <input type="text" id="date" placeholder="yyyy-mm-dd" size="10" required /><br/>
-        <button type="button" id="get_historical_balance" onclick="getHistoricalBalance()">Get historical balance</button><br/>
-        <label id="historical_balance"></label>
+        <button type="button" id="get_eth_historical_balance" onclick="getEthHistoricalBalance()">Get Eth historical balance</button><br/>
+        <label id="eth_historical_balance"></label><br/>
+        <button type="button" id="get_erc20_historical_balance" onclick="getErc20HistoricalBalance()">Get Erc20 historical balance</button><br/>
+        <label id="erc20_historical_balance"></label><br/>
+        <ul id="erc20_historical_balance_list">
+            
+        </ul>
       </div>
     </fieldset>
 <fieldset>
-    <legend>Results </legend><br>
+    <legend>Eth transaction list </legend><br>
     <label id="status"></label>
     <div style="align-items: center;">
         <button id="prev-button" onclick="prev_batch()">Previous</button>   
