@@ -33,4 +33,9 @@ Button "Get transactions" start crawling process. Results will be displayed insi
 * Prev - Go to the previous page.
 * Go - Jump to the specified page. Page number should be entered in text box.
 
-Button "Get historical balance" starts calculation of ETH balance for given address and given time.
+Button "Get historical balance" starts calculation of ETH balance for given address and given date.
+
+Button "Get erc20 historical balance" gathers historical balances per token, for given address and given date.
+
+**IMPORTANT NOTE**
+All of these operation can take a considerable amount of time.
